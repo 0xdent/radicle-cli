@@ -1,7 +1,9 @@
 use std::ffi::OsString;
+use std::str::FromStr;
 
 use anyhow::anyhow;
 
+use librad::collaborative_objects::ObjectId;
 use radicle_common::args::{Args, Error, Help};
 
 use radicle_common::{cobs, keys, person, profile, project};
@@ -18,6 +20,7 @@ Usage
 
     rad issue create <name> <peer-id> [-f | --fetch]
     rad issue delete <name | peer-id>
+    rad issue discuss <name | peer-id>
     rad issue list
 
 Options
@@ -29,6 +32,7 @@ Options
 #[derive(Debug)]
 pub enum Operation {
     Create { title: String, description: String },
+    Discuss { id: String, description: String },
     Delete {},
     List,
 }
@@ -58,8 +62,21 @@ impl Args for Options {
                         return Err(anyhow!(arg.unexpected()));
                     }
                 }
+                Long("id") => {
+                    if let Some(Operation::Discuss { ref mut id, .. }) = op {
+                        *id = parser.value()?.to_string_lossy().into();
+                    } else {
+                        return Err(anyhow!(arg.unexpected()));
+                    }
+                }
                 Long("description") => {
                     if let Some(Operation::Create {
+                        ref mut description,
+                        ..
+                    }) = op
+                    {
+                        *description = parser.value()?.to_string_lossy().into();
+                    } else if let Some(Operation::Discuss {
                         ref mut description,
                         ..
                     }) = op
@@ -73,6 +90,12 @@ impl Args for Options {
                     "c" | "create" => {
                         op = Some(Operation::Create {
                             title: String::new(),
+                            description: String::new(),
+                        })
+                    }
+                    "d" | "discuss" => {
+                        op = Some(Operation::Discuss {
+                            id: String::new(),
                             description: String::new(),
                         })
                     }
@@ -112,6 +135,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             for (id, issue) in issues.all(&project)? {
                 println!("{} {}", id, issue.title());
             }
+        }
+        Operation::Discuss { id, description } => {
+            issues.comment(&project, &ObjectId::from_str(&id)?, &description)?;
         }
         Operation::Delete { .. } => {
             todo!();
