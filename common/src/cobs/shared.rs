@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use librad::git::storage::ReadOnly;
 use librad::git::Urn;
+use serde::ser::{SerializeMap, Serializer};
 
 use crate::project;
 
@@ -134,9 +135,24 @@ pub type Replies = Vec<Comment>;
 pub struct Comment<R = ()> {
     pub author: Author,
     pub body: String,
+    #[serde(serialize_with = "serialize_reactions")]
     pub reactions: HashMap<Reaction, usize>,
     pub replies: R,
     pub timestamp: Timestamp,
+}
+
+fn serialize_reactions<S>(
+    value: &HashMap<Reaction, usize>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut map = serializer.serialize_map(Some(value.len()))?;
+    for (reaction, count) in value {
+        map.serialize_entry(&reaction.emoji.to_string(), &count)?;
+    }
+    map.end()
 }
 
 impl Comment<()> {
